@@ -21,7 +21,6 @@
   Based on the AR.js library and examples created by Jerome Etienne: https://github.com/jeromeetienne/AR.js/
 -->
 
-
 <script>
 
 var scene, camera, renderer, clock, deltaTime, totalTime;
@@ -30,7 +29,7 @@ var arToolkitSource, arToolkitContext;
 
 var markerRoot1;
 
-var material1, mesh1;
+var mesh1;
 
 initialize();
 animate();
@@ -38,6 +37,9 @@ animate();
 function initialize()
 {
 	scene = new THREE.Scene();
+
+	let ambientLight = new THREE.AmbientLight( 0xcccccc, 1.0 );
+	scene.add( ambientLight );
 				
 	camera = new THREE.Camera();
 	scene.add(camera);
@@ -105,79 +107,84 @@ function initialize()
 
 	// build markerControls
 	markerRoot1 = new THREE.Group();
+	markerRoot1.name = 'marker1';
 	scene.add(markerRoot1);
 	let markerControls1 = new THREEx.ArMarkerControls(arToolkitContext, markerRoot1, {
-		type: 'pattern', patternUrl: "data/kanji.patt",
+		type : 'pattern',
+		patternUrl : "data/letterA.patt",
 	})
 
-	////////////////////////////////////////////////////////////
-	// setup scene
-	////////////////////////////////////////////////////////////
-	
-	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-	
+	// the inside of the hole
+	let geometry1	= new THREE.CubeGeometry(2,2,2);
 	let loader = new THREE.TextureLoader();
-		
-	let sceneGroup = new THREE.Group();
-	markerRoot1.add(sceneGroup);
+	let texture = loader.load( 'images/tiles.jpg', render );
+	let material1	= new THREE.MeshBasicMaterial({
+		transparent : true,
+		map: texture,
+		color: 0xFF0000,
+		side: THREE.BackSide
+	}); 
 	
-	let texture = loader.load("images/color-grid.png");
-	// repeat texture
-	texture.wrapS = THREE.RepeatWrapping;
-	texture.wrapT = THREE.RepeatWrapping;
-	texture.repeat.set(8,1);
+	mesh1 = new THREE.Mesh( geometry1, material1 );
+	mesh1.position.y = -1;
 	
-	shadowMesh = new THREE.Mesh( 
-		new THREE.TorusKnotGeometry(0.5, 0.2, 128, 16), // new THREE.SphereBufferGeometry(1, 32, 32), 
-		new THREE.MeshLambertMaterial({ map: texture })
-	);
-	shadowMesh.position.y = 1;
-	shadowMesh.castShadow = true;
-	shadowMesh.receiveShadow = true;
-	sceneGroup.add( shadowMesh );
+	markerRoot1.add( mesh1 );
 	
-	let floorGeometry = new THREE.PlaneGeometry( 20,20 );
-	let floorMaterial = new THREE.ShadowMaterial();
-	floorMaterial.opacity = 0.3;
-	let floorMesh = new THREE.Mesh( floorGeometry, floorMaterial );
-	floorMesh.rotation.x = -Math.PI/2;
-	floorMesh.receiveShadow = true;
-	sceneGroup.add( floorMesh );
+	// the invisibility cloak (plane with a hole)
+	/*
+	let geometry0 = new THREE.PlaneGeometry(18,18, 9,9);
+	geometry0.faces.splice(80, 2); // make hole by removing top two triangles
+	geometry0.faceVertexUvs[0].splice(80, 2);
+	*/
 
+	// the border
+	let geometry0 = new THREE.PlaneGeometry(4,4, 4,4);
+	geometry0.faces.splice(10, 4); // make hole by removing top two triangles
+	geometry0.faceVertexUvs[0].splice(10, 4);
 	
-	let light = new THREE.PointLight( 0xffffff, 1, 100 );
-	light.position.set( 0,4,0 ); // default; light shining from top
-	light.castShadow = true;
-	light.shadow.mapSize = new THREE.Vector2(2048, 2048); // default 512
-	light.shadow.radius = 5
-	light.shadow.blurSamples = 25
-	sceneGroup.add( light );
+	geometry0.faces.splice(14, 4); // make hole by removing top two triangles
+	geometry0.faceVertexUvs[0].splice(14, 4);
 	
-	let lightSphere = new THREE.Mesh(
-		new THREE.SphereGeometry(0.1),
-		new THREE.MeshBasicMaterial({
-			color: 0xffffff,
-			transparent: true,
-			opacity: 0.8
-		})
-	);
-	lightSphere.position.copy( light.position );
-	sceneGroup.add( lightSphere );
+
+	let material0 = new THREE.MeshBasicMaterial({
+		map: loader.load( 'images/color-grid.png' ), // for testing placement
+		colorWrite: true,
+		wireframe: false
+	});
 	
-	let ambientLight = new THREE.AmbientLight( 0x666666 );
-	sceneGroup.add( ambientLight );
-	// let helper = new THREE.CameraHelper( light.shadow.camera );
-	// sceneGroup.add( helper );
+	let mesh0 = new THREE.Mesh( geometry0, material0 );
+	
+	mesh0.rotation.x = -Math.PI/2;
+	markerRoot1.add(mesh0);	
+
+	// the blocker
+	let geometry11 = new THREE.PlaneGeometry(8,8, 4,4);
+	geometry11.faces.splice(10, 4); // make hole by removing top two triangles
+	geometry11.faceVertexUvs[0].splice(10, 4);
+	
+	geometry11.faces.splice(14, 4); // make hole by removing top two triangles
+	geometry11.faceVertexUvs[0].splice(14, 4);
+	
+
+	let material11 = new THREE.MeshBasicMaterial({
+		map: loader.load( 'images/color-grid.png' ), // for testing placement
+		colorWrite: false,
+		wireframe: false
+	});
+	
+	let mesh11 = new THREE.Mesh( geometry11, material11 );
+	
+	mesh11.rotation.x = -Math.PI/2;
+	markerRoot1.add(mesh11);	
+
 }
+
 
 function update()
 {
 	// update artoolkit on every frame
 	if ( arToolkitSource.ready !== false )
 		arToolkitContext.update( arToolkitSource.domElement );
-		
-	shadowMesh.rotation.y -= 0.01;
 }
 
 

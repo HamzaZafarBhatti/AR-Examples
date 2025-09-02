@@ -32,8 +32,12 @@ var markerRoot1;
 
 var material1, mesh1;
 
+var ballMeshArray = [];
+
 initialize();
 animate();
+
+
 
 function initialize()
 {
@@ -104,11 +108,17 @@ function initialize()
 	////////////////////////////////////////////////////////////
 
 	// build markerControls
-	markerRoot1 = new THREE.Group();
-	scene.add(markerRoot1);
-	let markerControls1 = new THREEx.ArMarkerControls(arToolkitContext, markerRoot1, {
-		type: 'pattern', patternUrl: "data/kanji.patt",
-	})
+	markerRootA = new THREE.Group();
+	scene.add(markerRootA);
+	let markerControls1 = new THREEx.ArMarkerControls(arToolkitContext, markerRootA, {
+		type: 'pattern', patternUrl: "data/letterA.patt",
+	});
+	
+	markerRootB = new THREE.Group();
+	scene.add(markerRootB);
+	let markerControls2 = new THREEx.ArMarkerControls(arToolkitContext, markerRootB, {
+		type: 'pattern', patternUrl: "data/letterB.patt",
+	});
 
 	////////////////////////////////////////////////////////////
 	// setup scene
@@ -119,23 +129,8 @@ function initialize()
 	
 	let loader = new THREE.TextureLoader();
 		
-	let sceneGroup = new THREE.Group();
-	markerRoot1.add(sceneGroup);
-	
-	let texture = loader.load("images/color-grid.png");
-	// repeat texture
-	texture.wrapS = THREE.RepeatWrapping;
-	texture.wrapT = THREE.RepeatWrapping;
-	texture.repeat.set(8,1);
-	
-	shadowMesh = new THREE.Mesh( 
-		new THREE.TorusKnotGeometry(0.5, 0.2, 128, 16), // new THREE.SphereBufferGeometry(1, 32, 32), 
-		new THREE.MeshLambertMaterial({ map: texture })
-	);
-	shadowMesh.position.y = 1;
-	shadowMesh.castShadow = true;
-	shadowMesh.receiveShadow = true;
-	sceneGroup.add( shadowMesh );
+	sceneGroup = new THREE.Group();
+	markerRootA.add(sceneGroup);
 	
 	let floorGeometry = new THREE.PlaneGeometry( 20,20 );
 	let floorMaterial = new THREE.ShadowMaterial();
@@ -144,14 +139,27 @@ function initialize()
 	floorMesh.rotation.x = -Math.PI/2;
 	floorMesh.receiveShadow = true;
 	sceneGroup.add( floorMesh );
-
 	
+	// ballMeshArray
+	var colors = [0xFF0000, 0xFF8800, 0xFFFF00, 0x00CC00, 0x0000FF, 0x8800FF];
+	for (let i = 0; i < 6; i++)
+	{
+		let ballMesh = new THREE.Mesh(
+			new THREE.SphereGeometry(0.25, 32, 32),
+			new THREE.MeshLambertMaterial({ 
+				map: loader.load("images/basketball-gray.png"), 
+				color: colors[i]
+			})
+		);
+		ballMesh.castShadow = true;
+		scene.add( ballMesh );
+
+		ballMeshArray.push(ballMesh);
+	}
+
 	let light = new THREE.PointLight( 0xffffff, 1, 100 );
 	light.position.set( 0,4,0 ); // default; light shining from top
 	light.castShadow = true;
-	light.shadow.mapSize = new THREE.Vector2(2048, 2048); // default 512
-	light.shadow.radius = 5
-	light.shadow.blurSamples = 25
 	sceneGroup.add( light );
 	
 	let lightSphere = new THREE.Mesh(
@@ -169,6 +177,36 @@ function initialize()
 	sceneGroup.add( ambientLight );
 	// let helper = new THREE.CameraHelper( light.shadow.camera );
 	// sceneGroup.add( helper );
+	
+	
+	// default normal of a plane is 0,0,1. Apply mesh rotation to it.
+	let clipPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+		new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0) );
+	renderer.clippingPlanes = [clipPlane];
+	
+
+	let geometry0 = new THREE.PlaneGeometry(2,2, 4,4);
+	geometry0.faces.splice(10, 4); // make hole by removing triangles
+	geometry0.faceVertexUvs[0].splice(10, 4);
+	
+	geometry0.faces.splice(14, 4); // make hole by removing triangles
+	geometry0.faceVertexUvs[0].splice(14, 4);
+	
+
+	let material0 = new THREE.MeshBasicMaterial({
+		map: loader.load( 'images/color-grid.png' ),
+	});
+	
+	let mesh0 = new THREE.Mesh( geometry0, material0 );
+	
+	mesh0.rotation.x = -Math.PI/2;
+	mesh0.position.y = 0.04;
+	markerRootA.add(mesh0);	
+
+	let mesh1 = mesh0.clone();
+	mesh0.position.y = 0.05;
+	markerRootB.add(mesh1);
+
 }
 
 function update()
@@ -176,16 +214,51 @@ function update()
 	// update artoolkit on every frame
 	if ( arToolkitSource.ready !== false )
 		arToolkitContext.update( arToolkitSource.domElement );
+
+	if ( markerRootA.visible && markerRootB.visible )
+	{
 		
-	shadowMesh.rotation.y -= 0.01;
+		// align clipping plane to scene.
+		renderer.clippingPlanes[0].setFromNormalAndCoplanarPoint(
+			new THREE.Vector3(0,1,0).applyQuaternion(sceneGroup.getWorldQuaternion()),
+			sceneGroup.getWorldPosition()
+		);
+		
+		for (let i = 0; i < 6; i++)
+		{	
+			let p = parabolicPath( 
+				markerRootA.getWorldPosition(), 
+				markerRootB.getWorldPosition(), 
+				(totalTime -  i*Math.PI/3 ) % 6.283    );
+
+			let ballMesh = ballMeshArray[i];	
+			ballMesh.position.copy( p );
+			ballMesh.rotation.z += 0.1
+		}
+	}
 }
 
+// create a function p() that passes through the points (0,p0), (1,p1), (2,p2) 
+//  and evaluate that function at time t.
+function parabolaEvaluate(p0, p1, p2, t)
+{
+	return ( 0.5*(p0 - 2*p1 + p2) )*t*t + ( -0.5*(3*p0 - 4*p1 + p2) )*t + ( p0 );
+}
+
+function parabolicPath( pointStart, pointEnd, time )
+{
+	let pointMiddle = new THREE.Vector3().addVectors( pointStart, pointEnd ).multiplyScalar(0.5).add( new THREE.Vector3(0,2,0) );
+	return new THREE.Vector3(
+		parabolaEvaluate( pointStart.x, pointMiddle.x, pointEnd.x, time ),
+		parabolaEvaluate( pointStart.y, pointMiddle.y, pointEnd.y, time ),
+		parabolaEvaluate( pointStart.z, pointMiddle.z, pointEnd.z, time )
+	);	
+}
 
 function render()
 {
 	renderer.render( scene, camera );
 }
-
 
 function animate()
 {
